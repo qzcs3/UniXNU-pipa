@@ -9,6 +9,12 @@
 #include <machine/machine_routines.h>
 #include <arm/thread.h>
 #include <vm/vm_map.h>
+#if __has_include(<vm/vm_map_xnu.h>)
+#include <vm/vm_map_xnu.h>
+#endif
+#if __has_include(<vm/vm_map_xnu.h>)
+#include <vm/vm_map_xnu.h>
+#endif
 #include <ipc/ipc_space.h>
 #include <ipc/ipc_port.h>
 #include <string.h>

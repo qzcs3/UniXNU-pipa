@@ -8,14 +8,15 @@ compile record of the previous XNU pass."""
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+from kernel_target import TRIPLE
 source = ROOT / 'kits/pipa/BootRamoops.c'
 out = ROOT / 'build/boot-progress'
 out.mkdir(parents=True, exist_ok=True)
 obj, archive = out / 'BootRamoops.o', out / 'libBootProgress.a'
-subprocess.run(['xcrun', '--sdk', 'iphoneos', 'clang', '-arch', 'arm64', '-mkernel', '-miphoneos-version-min=17.0',
-                '-mgeneral-regs-only', '-Os', '-Wall', '-Wextra', '-Werror', '-c', source, '-o', obj], check=True)
 
 def compile_like(object_record, source, target, extra):
     """An XNU object's own compile command (its build record) with SOURCE and TARGET in place of its own, warnings dropped."""
@@ -25,17 +26,24 @@ def compile_like(object_record, source, target, extra):
         arg = args[i]
         if arg == record['file']:
             command.append(str(source))
-        elif arg in ('-o', '-MF', '-MT', '-MJ'):
-            if arg == '-o':
-                command += ['-o', str(target)]
+        elif arg == '-o':
+            command += ['-o', str(target)]
+            i += 1
+        elif arg.startswith('--target='):
+            command.append(f'--target={TRIPLE}')
+        elif arg in ('-MF', '-MT', '-MJ'):
             i += 1
         elif arg == '-Xclang' and args[i + 1].startswith('-W'):
             i += 1
         elif not arg.startswith('-W'):
             command.append(arg)
         i += 1
-    subprocess.run(command + ['-mgeneral-regs-only', '-Wall', '-Wextra', '-Werror', *extra], cwd=record['directory'], check=True,
-                   timeout=90)
+    subprocess.run(command + ['-mgeneral-regs-only', '-Wall', '-Wextra', '-Werror',
+                              '-Wno-overriding-option', '-Wno-missing-designated-field-initializers',
+                              '-Wno-unused-but-set-global', *extra],
+                   cwd=record['directory'], check=True, timeout=90)
+
+compile_like('osfmk/DEVELOPMENT/startup.o.json', source, obj, ['-I', str(ROOT / '.cache/xnu-work/osfmk')])
 
 # The policy with kern_exec.o's command (BSD).
 policy_obj = out / 'BootWatchdogPolicy.o'
@@ -51,7 +59,7 @@ compile_like('osfmk/DEVELOPMENT/startup.o.json', ROOT / 'kits/pipa/BootFaultProb
 # kernel stacks of backboardd's and SpringBoard's threads, which BootRamoops.c captures on a worker of its own and logs. They read
 # Mach's task, thread and IPC internals: startup.o's command (osfmk), as BootFaultProbe.c.
 probe_objs = []
-for probe in ('BootProcessProbe', 'BootUiTraceProbe'):
+for probe in ('BootProcessProbe', 'BootUiTraceProbe', 'BootProgressStubs'):
     probe_obj = out / f'{probe}.o'
     compile_like('osfmk/DEVELOPMENT/startup.o.json', ROOT / f'kits/pipa/{probe}.c', probe_obj,
                  ['-I', str(ROOT / '.cache/xnu-work/osfmk')])

@@ -33,23 +33,24 @@ def require(value, message):
 
 
 reference = ROOT.parent / 'kernel/kernel.macho'
-if not reference.is_file():
+original = ROOT / '.cache/firmware/kernelcache.macho/kernelcache.release.ipad7.decompressed'
+cached = [path for path in ROOT.parents[1].glob('ipsw/*/kernelcache.decompressed')
+          if hashlib.sha256(path.read_bytes()).hexdigest() == ORIGINAL_KERNELCACHE_SHA256] if not original.exists() else [original]
+
+if not reference.is_file() or not cached:
     stub = OUT / 'FirstPassStub.c'
     stub.write_text('// No reference kernel yet: the bridge needs one, so the first kernel links without it.\n'
                     'void sheng_pmgr_run(void);\nvoid sheng_pmgr_run(void)\n{\n}\n')
-    run(['xcrun', '--sdk', 'iphoneos', 'clang', '-arch', 'arm64', '-mkernel', '-miphoneos-version-min=17.0', '-Os',
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from kernel_target import ARCH, TRIPLE
+    run(['xcrun', 'clang', f'--target={TRIPLE}', '-arch', ARCH, '-mkernel', '-Os',
          '-c', stub, '-o', OUT / 'FirstPassStub.o'])
     (OUT / 'libShengPlatformPower.a').unlink(missing_ok=True)
     run(['xcrun', 'ar', 'rcs', OUT / 'libShengPlatformPower.a', OUT / 'FirstPassStub.o'])
-    print('PMGR bridge: no reference kernel yet; linked a no-op sheng_pmgr_run. Build the kernel again to link the bridge.')
+    print('PMGR bridge: no reference kernel or no iPad7 kernelcache; linked a no-op sheng_pmgr_run.')
     raise SystemExit(0)
 
-# The contract audit reads the original kernelcache from .cache/firmware; take it from the IPSW cache of the driver.
-original = ROOT / '.cache/firmware/kernelcache.macho/kernelcache.release.ipad7.decompressed'
 if not original.exists():
-    cached = [path for path in ROOT.parents[1].glob('ipsw/*/kernelcache.decompressed')
-              if hashlib.sha256(path.read_bytes()).hexdigest() == ORIGINAL_KERNELCACHE_SHA256]
-    require(cached, 'The original kernelcache is not in the IPSW cache; run "unixnu ipsw fetch"')
     original.parent.mkdir(parents=True, exist_ok=True)
     original.symlink_to(cached[0])
 print(run(['python3', ROOT / 'scripts/audit-amfi-pmgr-contract.py', '--candidate', reference], text=True), end='')

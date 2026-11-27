@@ -1,3 +1,5 @@
+schema_version = 2
+
 # Board description of the Xiaomi Pad 6 (pipa, SM8250), read by the unixnu build driver.
 #
 # Prepared without the tablet: every value names its public source and none has been observed through UniXNU on a
@@ -8,6 +10,8 @@ name = "pipa"
 soc = "SM8250"
 description = "Xiaomi Pad 6"
 kit = "pipa"                       # a package/ of this repository would appear as kits/pipa in the build tree
+soc_source = "sm8250"
+os_profile = "macos-27.3-26C5035r"
 
 # The same target OS image as UniXNU-sheng: the unchanged iPad7,1 iPadOS 17.7.11 restore image.
 [ipsw]
@@ -38,6 +42,8 @@ windows = [
 
 [kernel]
 defconfig = "pipa_defconfig"
+config_fragments = ["arch:configs/common.config", "soc:configs/sm8250.config"]
+patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series"]
 # Archive builders of the kernel step, in order; the ones pipa_defconfig links. build-arm-driver.py is UniXNU's generic
 # driver builder, which finds each component in UniXNU's components.toml.
 archives = [
@@ -155,11 +161,11 @@ volume = "PIPAESP"
 size_mib = 192
 loader = "firmware"
 title = "pipa first boot: source 4K XNU to the panic screen"
-# This tablet was upgraded to 16 GB. Android's /memory has the banks 0x80000000+0x37700000, 0xc0000000+0x1c0000000 and
-# 0x800000000+0x200000000: the added 8 GiB is a bank of its own at 32 GiB. XNU takes dram-base and dram-size as one
-# range (is_dram_addr, which only picks the attribute of device mappings), so it spans from the base to the end of the
-# last bank; every register block lies below 0x80000000.
-dram_size = "0x980000000"
+# Verified stock 8 GB DRAM layout from live hardware survey (2026-11-11):
+# Bank 0: 0x80000000 + 0x3bb00000 (955 MiB)
+# Bank 1: 0xc0000000 + 0x1c0000000 (7.0 GiB)
+# Total span is 0x80000000 to 0x280000000 (8 GiB = 0x200000000). Zero memory at 32 GiB (0x800000000).
+dram_size = "0x200000000"
 skip_setup_tool = "scripts/seed-data-skip-setup.py"
 # No input device yet: without these SpringBoard preferences iPadOS turns the display off about 30 s after it starts and
 # puts the system to sleep, which ArmCpu does not support (UniXNU-tb128fu, UniXNU-qemu).
@@ -287,3 +293,83 @@ cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
 packed_data_ramdisk = true
 ipad_identity = true
 unique_chip_id = "required"          # the platform seed is not stored in any repository
+
+[components]
+include = ["ArmDTPlatform", "ArmCpu", "XnuPrelink", "DarwinBoot", "SoftwareAES", "RamBlock", "VirtioMmioBlock", "GopFramebuffer", "AppleKeyStoreState", "VerifiedRoot", "AdrenoPM4", "AdrenoFirmware"]
+
+[package.defconfig]
+"macos-27.3-26C5035r" = "pipa_macos_defconfig"
+"ipados-17.7.11-21H461" = "pipa_defconfig"
+
+["os_overrides"."macos-27.3-26C5035r"]
+remove = ["payload.panic_screen", "payload.adt.unique_chip_id", "payload.adt.chip_id"]
+
+["os_overrides"."macos-27.3-26C5035r"."ipsw"]
+build = "26C5035r"
+product = "Mac17,11"
+version = "27.3"
+
+["os_overrides"."macos-27.3-26C5035r"."components"]
+include = ["ArmDTPlatform", "ArmCpu", "XnuPrelink", "DarwinBoot", "SoftwareAES", "RamBlock", "VirtioMmioBlock", "GopFramebuffer", "AppleKeyStoreState", "VerifiedRoot", "AdrenoPM4", "AdrenoFirmware"]
+
+["os_overrides"."macos-27.3-26C5035r"."kernel"]
+defconfig = "pipa_macos_defconfig"
+config_fragments = ["arch:configs/common.config", "soc:configs/sm8250.config", "os:configs/macos.config"]
+patch_series = ["arch:patches/xnu/series", "soc:patches/xnu-12377/series", "os:patches/xnu/series"]
+archives = [
+  "build-corecrypto-14.py",
+  "build-corecrypto-14.py --namespace",
+  "build-arm-driver.py ArmDTPlatform",
+  "build-arm-driver.py ArmCpu",
+  "build-arm-driver.py PipaUfs --sm8250 --no-verified-block --probe-only",
+  "build-libpthread-kernel.py",
+  "build-link-stubs.py",
+  "build-platform-power.py",
+  "build-adreno650.py",
+  "build-adreno740-accelerator.py --component Adreno650",
+]
+
+["os_overrides"."macos-27.3-26C5035r"."payload"]
+size_mib = 200
+entry_probe = true
+kernel_args = [
+  "-v",
+  "serial=3",
+  "debug=0x14e",
+  "kt_fixed_zones=120",
+  "-no_slto_panic",
+  "native-ufs-probe=16",
+  "pmgr=2",
+  "sheng-pmgr=2",
+  "offline-mobile-graphics-load=1",
+  "offline-legacy-register=1",
+  "offline-legacy-gop=1",
+  "offline-legacy-unit-scale=2",
+  "offline-legacy-pm=1",
+  "offline-legacy-validate=1",
+  "offline-legacy-transfer=1",
+  "offline-legacy-cpu-present=1",
+  "offline-legacy-phase=4",
+  "offline-key-events=1",
+  "sheng-aks=1",
+  "offline-hid-input=1",
+  "offline-hid-home=1",
+  "pipa-touch=5",
+  "sheng-touch-hid=1",
+  "pipa-buttons=1",
+  "sheng-smp=1",
+  "armcpu-spi-ipi=1",
+  "armcpu-self-ipi=1",
+  "pipa-cpufreq=1",
+  "sheng-vsync=60",
+  "sheng-vsync-fixed=1",
+  "sheng-disable-watchdogd=1",
+  "apfs-boot-shim=1",
+  "vc-text=1",
+  "exec-log=1",
+]
+
+["os_overrides"."macos-27.3-26C5035r"."payload"."adt"]
+chip_id = "6050"
+owned_memory_size = "0x170000000"
+root_match_volume_uuid = "84581E99-85BE-4957-AC53-2947E887B3E4"

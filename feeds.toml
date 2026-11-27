@@ -1,0 +1,5 @@
+[[source]]
+kind = "soc"
+name = "sm8250"
+local = "../UniXNU-sm8250-common"
+git = "https://github.com/qzcs3/UniXNU-sm8250-common.git"

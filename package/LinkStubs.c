@@ -32,3 +32,62 @@ __attribute__((weak)) int boot_log_export_put(u32 generation, u32 total, u32 off
   (void)size;
   return -4;
 }
+
+// When OWNER_ROOT_AUDIT is disabled, vfs_syscalls still references native_owner_root_accepted
+// and native_owner_root_mount_device under the macOS profile.
+typedef int dev_t;
+volatile int native_owner_root_accepted = 0;
+volatile dev_t native_owner_root_mount_device = (dev_t)-1;
+void native_owner_root_accepted_checkpoint(int apple, int owner);
+__attribute__((weak)) void native_owner_root_accepted_checkpoint(int apple, int owner)
+{
+  (void)apple;
+  (void)owner;
+}
+
+// Native exit trace stub for macOS k27 parity
+void native_exit_trace(int pid, const char *name, int status);
+__attribute__((weak)) void native_exit_trace(int pid, const char *name, int status)
+{
+  (void)pid;
+  (void)name;
+  (void)status;
+}
+
+// GOP handoff stubs when legacy display is not linked in M1
+int native_gop_handoff_call(unsigned int op, void *task, const void *in, unsigned long inSize, void *out, unsigned long outSize);
+__attribute__((weak)) int native_gop_handoff_call(unsigned int op, void *task, const void *in, unsigned long inSize, void *out, unsigned long outSize)
+{
+  (void)op;
+  (void)task;
+  (void)in;
+  (void)inSize;
+  (void)out;
+  (void)outSize;
+  return -1;
+}
+
+void *native_gop_handoff_memory(void);
+__attribute__((weak)) void *native_gop_handoff_memory(void)
+{
+  return 0;
+}
+
+// corecrypto original kmod stubs for first pass
+void *source_corecrypto14_original(void);
+__attribute__((weak)) void *source_corecrypto14_original(void)
+{
+  return 0;
+}
+
+int source_corecrypto14_start_once(void *module, void *data);
+__attribute__((weak)) int source_corecrypto14_start_once(void *module, void *data)
+{
+  (void)module;
+  (void)data;
+  return 0;
+}
+
+
+
+

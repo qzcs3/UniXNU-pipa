@@ -10,6 +10,8 @@ pipa-gpu=<mode>) drives these objects. No firmware is embedded here: the GMU, SQ
 import json, re, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+from kernel_target import TRIPLE
 c_recipe = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o.json').read_text().strip().rstrip(','))
 cxx_recipe = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json').read_text().strip().rstrip(','))
 out = ROOT / 'build/adreno650'
@@ -38,6 +40,8 @@ for source in sources:
         elif value == '-o':
             command += ['-o', str(obj)]
             i += 1
+        elif value.startswith('--target='):
+            command.append(f'--target={TRIPLE}')
         elif value in ('-MF', '-MJ'):
             i += 1
         elif value == '-Xclang' and recipe['arguments'][i + 1].startswith('-W'):
@@ -47,10 +51,11 @@ for source in sources:
         i += 1
     command += ['-I', str(ROOT / 'kits/AdrenoPM4'), '-I', str(ROOT / 'kits/ArmSmmu4K'), '-I', str(ROOT / 'kits/AdrenoFirmware'),
                 '-I', str(ROOT / 'kits/pipa'), '-I', str(ROOT / '.cache/xnu-work/osfmk'),
-                '-I', str(driver), '-Wall', '-Wextra', '-Werror',
+                '-I', str(driver), '-Wall', '-Wextra', '-Werror', '-Wno-overriding-option',
                 '-Wno-unused-parameter', '-Wno-incompatible-sysroot', '-Wno-c99-designator',
                 '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
-                '-Wno-unnecessary-virtual-specifier']
+                '-Wno-unnecessary-virtual-specifier', '-Wno-missing-designated-field-initializers',
+                '-Wno-unused-but-set-global']
     result = subprocess.run(command, cwd=recipe['directory'], capture_output=True, text=True)
     if result.returncode:
         sys.exit(str(source) + ':\n' + result.stderr[-2500:])

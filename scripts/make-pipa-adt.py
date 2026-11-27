@@ -132,7 +132,7 @@ def main():
         ('#address-cells', struct.pack('<I', 2)),
         ('#size-cells', struct.pack('<I', 2)),
     ], [
-        node('chosen', [('random-seed', os.urandom(64)),
+        node('chosen', [('random-seed', os.urandom(256)),
                         # Without these XNU never publishes IOPlatformUUID and gethostuuid() blocks forever
                         # for callers (configd) that pass a zero timeout.
                         *([('unique-chip-id', struct.pack('<Q', args.unique_chip_id)), ('chip-id', struct.pack('<I', args.chip_id))]
@@ -151,6 +151,9 @@ def main():
                           if args.owned_memory_size else []),
                         ('dram-base', struct.pack('<Q', DRAM_BASE)),
                         ('dram-size', struct.pack('<Q', args.dram_size)),
+                        # SM8250 has no hardware CTRR: kernel text stays writable by hardware; XNU 12377
+                        # ml_unsafe_kernel_text_init() leaves _unsafe_kernel_text_initialized false if absent.
+                        ('kernel-ctrr-to-be-enabled', struct.pack('<I', 0)),
                         # Image4 hash algorithm. The target iPad's DT specifies sha2-384 in /chosen; this
                         # selects the algorithm only and asserts nothing about Apple silicon or fuses.
                         ('crypto-hash-method', b'sha2-384\0'),
